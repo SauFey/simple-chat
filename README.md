@@ -1,73 +1,69 @@
-# Welcome to your Lovable project
+# Simple Chat 🌈💬
 
-## Project info
+En enkel, snabb och modern chatt-app byggd för community-känsla – med fokus på trygghet, inkludering och enkel användning.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+Målet med projektet är att skapa en onlinechatt-community för HBTQ+ personer där man kan prata, hitta gemenskap och känna sig välkommen.
 
-## How can I edit this code?
+---
 
-There are several ways of editing your application.
+## ✨ Funktioner (nu / på väg)
 
-**Use Lovable**
+✅ Modern frontend med React + TypeScript  
+✅ Responsiv UI (mobil + desktop)  
+✅ Förberett för backend/realtime (t.ex. Supabase)  
+🔜 Chattrum (rooms)  
+🔜 Sätta eget namn / profil  
+🔜 Moderation (rapportera, blockera, mute)  
+🔜 Inloggning och användarhantering  
+🔜 Realtime-meddelanden
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+---
 
-Changes made via Lovable will be committed automatically to this repo.
+## 🧠 Varför detta projekt?
 
-**Use your preferred IDE**
+Det ska vara en community-chatt som är:
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+- **Enkel att gå med i**
+- **Snabb och lätt att använda**
+- **Trygg och modererad**
+- **Inkluderande och respektfull**
+- **Anpassad för HBTQ+ communityt**
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+Trygghet är inte en “extra feature” — det är en grundfunktion.
 
-Follow these steps:
+---
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+## 🛡️ Trygghet & Moderation
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+Appen är byggd med följande principer:
 
-# Step 3: Install the necessary dependencies.
-npm i
+- Användare ska kunna vara **anonyma om de vill**
+- Minimalt med data sparas (privacy-by-design)
+- Moderation ska finnas tidigt:
+  - rapportera innehåll/användare
+  - block/mute
+  - tydliga regler och konsekvenser
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+---
 
-**Edit a file directly in GitHub**
+## 🧩 Tech stack
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+- **Vite**
+- **React**
+- **TypeScript**
+- **Tailwind CSS**
+- **shadcn/ui**
+- (Planerat) **Supabase** för:
+  - Auth
+  - Databas
+  - Realtime
+  - Row Level Security (RLS)
 
-**Use GitHub Codespaces**
+---
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## 🚀 Kom igång lokalt
 
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+### 1) Klona repot
+```bash
+git clone https://github.com/SauFey/simple-chat.git
+cd simple-chat

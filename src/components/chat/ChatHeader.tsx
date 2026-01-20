@@ -1,13 +1,18 @@
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, User } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 interface ChatHeaderProps {
   title?: string;
   subtitle?: string;
+  username?: string;
+  onProfileClick?: () => void;
 }
 
-export const ChatHeader = ({ 
-  title = "Chatt", 
-  subtitle = "Online" 
+export const ChatHeader = ({
+  title = "Chatt",
+  subtitle = "Online",
+  username,
+  onProfileClick,
 }: ChatHeaderProps) => {
   return (
     <header className="flex items-center gap-3 px-6 py-4 bg-chat-header-bg border-b border-border shadow-card-soft">
@@ -16,11 +21,23 @@ export const ChatHeader = ({
       </div>
       <div className="flex-1">
         <h1 className="text-base font-semibold text-foreground">{title}</h1>
-        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-green-500" />
-          {subtitle}
-        </p>
+        {subtitle && (
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
+        )}
       </div>
+      {username && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onProfileClick}
+          className="flex items-center gap-2"
+        >
+          <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
+            <User className="w-4 h-4 text-muted-foreground" />
+          </div>
+          <span className="hidden sm:inline text-sm font-medium">{username}</span>
+        </Button>
+      )}
     </header>
   );
 };

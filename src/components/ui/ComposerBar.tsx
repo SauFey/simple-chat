@@ -1,12 +1,38 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useLocation, useParams } from "react-router-dom";
+import { useChatStore } from "../../stores/chatStore";
+
+function parseChatTarget(pathname: string): { kind: "room" | "dm" | "none" } {
+  if (/^\/rooms\/[^/]+$/.test(pathname)) return { kind: "room" };
+  if (/^\/dm\/[^/]+$/.test(pathname)) return { kind: "dm" };
+  return { kind: "none" };
+}
 
 export function ComposerBar() {
   const [text, setText] = useState("");
 
+  const location = useLocation();
+  const params = useParams();
+
+  const target = useMemo(
+    () => parseChatTarget(location.pathname),
+    [location.pathname],
+  );
+
+  const sendRoomMessage = useChatStore((s) => s.sendRoomMessage);
+  const sendDmMessage = useChatStore((s) => s.sendDmMessage);
+
+  const id = params.id; // route param från /rooms/:id eller /dm/:id
+
   function send() {
     const msg = text.trim();
     if (!msg) return;
-    console.log("SEND:", msg);
+
+    if (!id || target.kind === "none") return;
+
+    if (target.kind === "room") sendRoomMessage(id, msg);
+    if (target.kind === "dm") sendDmMessage(id, msg);
+
     setText("");
   }
 

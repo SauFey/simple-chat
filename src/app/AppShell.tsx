@@ -1,6 +1,6 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { BottomNav } from "../components/BottomNav";
-import { ComposerBar } from "../components/ComposerBar";
+import { ComposerBar } from "../components/ui/ComposerBar";
 
 function isChatRoute(pathname: string) {
   return /^\/(dm|rooms)\/[^/]+$/.test(pathname);

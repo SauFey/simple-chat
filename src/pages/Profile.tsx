@@ -8,6 +8,9 @@ import {
 } from "../stores/chatStore";
 
 import { uploadAvatar, uploadProfilePhoto } from "../lib/storage";
+import { deleteProfilePhoto } from "../lib/storage";
+import { X } from "lucide-react";
+import { deleteAvatar } from "../lib/storage";
 
 const ORIENTATION_OPTIONS: { key: Orientation; label: string }[] = [
   { key: "Gay", label: "Gay" },
@@ -74,9 +77,13 @@ function normalizeProfile(p: any) {
   return {
     ...p,
     orientations: [...(p.orientations ?? [])].sort(),
-    photos: [...(p.photos ?? [])].map((x: string) =>
-      x?.startsWith("blob:") ? "blob" : x,
-    ),
+    photos: [...(p.photos ?? [])].map((X: any) => ({
+      url:
+        typeof X.url === "string" && X.url.startsWith("blob:")
+          ? "blob"
+          : (X.url ?? ""),
+      path: X.path ?? "",
+    })),
     avatarUrl:
       typeof p.avatarUrl === "string" && p.avatarUrl.startsWith("blob:")
         ? "blob"
@@ -84,11 +91,15 @@ function normalizeProfile(p: any) {
   };
 }
 
+const MAX_PHOTOS = 6;
+
 export function Profile() {
   const meDraft = useChatStore((s) => s.meDraft);
   const meSaved = useChatStore((s) => s.meSaved);
   const setMe = useChatStore((s) => s.setMeDraft);
   const saveMe = useChatStore((s) => s.saveMe);
+  const remaining = MAX_PHOTOS - (meDraft.photos?.length ?? 0);
+  const limitedFiles = meDraft.photos?.slice(0, Math.max(0, remaining));
 
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
@@ -97,6 +108,9 @@ export function Profile() {
 
   // “Sparat ✅”
   const [savedPulse, setSavedPulse] = useState(false);
+
+  const avatarSrc =
+    meDraft.avatar?.url || "https://api.dicebear.com/9.x/thumbs/svg?seed=User";
 
   const isDirty = useMemo(() => {
     return (
@@ -114,54 +128,57 @@ export function Profile() {
     try {
       const userId = meDraft.id; // senare: supabase auth user.id
 
-      let nextAvatarUrl = meDraft.avatarUrl ?? "";
+      let nextAvatar = meDraft.avatar ?? null;
       let nextPhotos = [...(meDraft.photos ?? [])];
 
       // 1) Upload avatar om ny valdes
       if (avatarFile) {
-        const publicUrl = await uploadAvatar(userId, avatarFile);
-        nextAvatarUrl = publicUrl;
+        const uploaded = await uploadAvatar(userId, avatarFile);
+
+        // ✅ RADERA GAMLA AVATAREN (om den fanns i storage)
+        const oldPath = meSaved.avatar?.path;
+        const newPath = uploaded.path;
+
+        if (oldPath && oldPath !== newPath) {
+          await deleteAvatar(oldPath);
+        }
+
+        nextAvatar = uploaded;
         setAvatarFile(null);
 
-        // revoke blob preview
+        // revoke blob preview (om du använder det)
         if (avatarObjectUrlRef.current?.startsWith("blob:")) {
           URL.revokeObjectURL(avatarObjectUrlRef.current);
           avatarObjectUrlRef.current = null;
         }
       }
 
-      // 2) Upload nya gallery-filer (om några)
+      // gallery
       if (galleryFiles.length > 0) {
-        // Behåll bara redan-sparade (icke-blob) urls
         const existingNonBlob = nextPhotos.filter(
-          (u) => !u.startsWith("blob:"),
+          (p) => !p.url.startsWith("blob:"),
         );
-
-        const uploadedUrls: string[] = [];
+        const uploadedItems = [];
         for (const f of galleryFiles) {
-          const publicUrl = await uploadProfilePhoto(userId, f);
-          uploadedUrls.push(publicUrl);
+          uploadedItems.push(await uploadProfilePhoto(userId, f));
         }
         setGalleryFiles([]);
 
-        // revoke blob previews som låg i photos
-        for (const u of nextPhotos) {
-          if (u.startsWith("blob:")) {
-            URL.revokeObjectURL(u);
-            photoObjectUrlsRef.current.delete(u);
+        // revoke blob previews
+        for (const p of nextPhotos) {
+          if (p.url.startsWith("blob:")) {
+            URL.revokeObjectURL(p.url);
+            photoObjectUrlsRef.current.delete(p.url);
           }
         }
 
-        nextPhotos = [...existingNonBlob, ...uploadedUrls];
+        nextPhotos = [...existingNonBlob, ...uploadedItems];
       }
 
-      // 3) Uppdatera draft med riktiga URL:er och spara
-      setMe({ avatarUrl: nextAvatarUrl, photos: nextPhotos });
-
-      // Låt Zustand applicera patchen innan saveMe (minskar race-risk)
+      setMe({ avatar: nextAvatar, photos: nextPhotos });
       await Promise.resolve();
-
       saveMe();
+
       setSavedPulse(true);
     } catch (err: any) {
       console.error(err);
@@ -207,7 +224,7 @@ export function Profile() {
       <section className="rounded-lg border p-4 space-y-4">
         <div className="flex items-center gap-4">
           <img
-            src={meDraft.avatarUrl}
+            src={avatarSrc}
             alt={meDraft.name}
             className="h-20 w-20 rounded-full border object-cover"
           />
@@ -242,7 +259,7 @@ export function Profile() {
                   const url = URL.createObjectURL(file);
                   avatarObjectUrlRef.current = url;
 
-                  setMe({ avatarUrl: url });
+                  setMe({ avatar: { url, path: "" } });
                   e.currentTarget.value = "";
                 }}
               />
@@ -258,6 +275,24 @@ export function Profile() {
               onChange={(e) => setMe({ location: e.target.value })}
               className="mt-1 w-full rounded-md border bg-background px-2 py-2 text-sm"
               placeholder="t.ex. Malmö"
+            />
+          </div>
+
+          <div>
+            <div className="text-sm font-medium">Ålder</div>
+            <input
+              type="number"
+              min={18}
+              max={99}
+              value={meDraft.age ?? ""}
+              onChange={(e) =>
+                setMe({
+                  age:
+                    e.target.value === "" ? undefined : Number(e.target.value),
+                })
+              }
+              className="mt-1 w-full rounded-md border bg-background px-2 py-2 text-sm"
+              placeholder="t.ex. 29"
             />
           </div>
 
@@ -301,23 +336,35 @@ export function Profile() {
         </div>
 
         <div className="grid grid-cols-3 gap-2">
-          {(meDraft.photos ?? []).map((url, idx) => (
-            <div key={url} className="relative">
+          {(meDraft.photos ?? []).map((photo, idx) => (
+            <div key={photo.url + idx} className="relative">
               <img
-                src={url}
+                src={photo.url}
                 alt={`Bild ${idx + 1}`}
                 className="aspect-square w-full rounded-md border object-cover"
               />
               <button
                 type="button"
-                onClick={() => {
-                  // ta bort + revoke om blob
-                  const next = meDraft.photos.filter((u) => u !== url);
+                onClick={async () => {
+                  // Ta bort från UI direkt (snappy), sen storage
+                  const next = (meDraft.photos ?? []).filter(
+                    (p) => p !== photo,
+                  );
                   setMe({ photos: next });
 
-                  if (url.startsWith("blob:")) {
-                    URL.revokeObjectURL(url);
-                    photoObjectUrlsRef.current.delete(url);
+                  // Revoke blob preview om det var en blob
+                  if (photo.url.startsWith("blob:")) {
+                    URL.revokeObjectURL(photo.url);
+                    photoObjectUrlsRef.current.delete(photo.url);
+                    return; // ingen storage-delete behövs
+                  }
+
+                  // Om den har path: radera från storage
+                  try {
+                    await deleteProfilePhoto(photo.path);
+                  } catch (e) {
+                    console.error(e);
+                    // (valfritt) här kan du lägga tillbaka fotot om delete failar
                   }
                 }}
                 className="absolute right-1 top-1 rounded-md border bg-background/90 px-2 py-1 text-xs"
@@ -342,13 +389,14 @@ export function Profile() {
 
                 setGalleryFiles((prev) => [...prev, ...files]);
 
-                const previewUrls = files.map((f) => {
+                const previewItems = files.map((f) => {
                   const u = URL.createObjectURL(f);
                   photoObjectUrlsRef.current.add(u);
-                  return u;
+                  return { url: u, path: "" };
                 });
 
-                setMe({ photos: [...(meDraft.photos ?? []), ...previewUrls] });
+                setMe({ photos: [...(meDraft.photos ?? []), ...previewItems] });
+
                 e.currentTarget.value = "";
               }}
             />
@@ -453,6 +501,23 @@ export function Profile() {
           className="h-5 w-5"
           checked={meDraft.nsfwEnabled}
           onChange={(e) => setMe({ nsfwEnabled: e.target.checked })}
+        />
+      </section>
+
+      <section className="rounded-lg border p-3 flex items-center justify-between">
+        <div>
+          <div className="font-medium">Tillåt PM från andra</div>
+          <div className="text-sm text-muted-foreground">
+            Om av kan ingen starta en ny PM-tråd med dig. Du kan fortfarande
+            själv starta PM.
+          </div>
+        </div>
+
+        <input
+          type="checkbox"
+          className="h-5 w-5"
+          checked={meDraft.allowIncomingDms}
+          onChange={(e) => setMe({ allowIncomingDms: e.target.checked })}
         />
       </section>
 

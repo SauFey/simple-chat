@@ -1,6 +1,7 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { BottomNav } from "../components/BottomNav";
 import { ComposerBar } from "../components/ui/ComposerBar";
+import { ProfilePreviewModal } from "../components/profile/ProfilePreviewModal";
 
 function isChatRoute(pathname: string) {
   return /^\/(dm|rooms)\/[^/]+$/.test(pathname);
@@ -10,8 +11,6 @@ export function AppShell() {
   const location = useLocation();
   const showComposer = isChatRoute(location.pathname);
 
-  // Reservera höjd så content inte hamnar bakom nav/composer.
-  // ComposerBar (ca 64px) + BottomNav (ca 64px) => ~128px
   const bottomPadding = showComposer ? "pb-32" : "pb-16";
 
   return (
@@ -23,6 +22,9 @@ export function AppShell() {
       {showComposer && <ComposerBar />}
 
       <BottomNav />
+
+      {/* ✅ Global profil-preview */}
+      <ProfilePreviewModal />
     </div>
   );
 }

@@ -2,6 +2,11 @@ import { useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { MessageBubble } from "../components/ui/messagebubble";
 import { useChatStore } from "../stores/chatStore";
+import { useState } from "react";
+import { PublicProfile } from "@/stores/uiStore";
+import { ROOMS } from "../data/rooms";
+
+const EMPTY_MESSAGES: any[] = [];
 
 export function RoomChat() {
   const { id } = useParams();
@@ -9,7 +14,19 @@ export function RoomChat() {
 
   const ensureRoom = useChatStore((s) => s.ensureRoom);
   const meId = useChatStore((s) => s.meSaved.id);
-  const messages = useChatStore((s) => s.roomMessages[roomId] ?? []);
+  const messages = useChatStore(
+    (s) => s.roomMessages[roomId] ?? EMPTY_MESSAGES,
+  );
+
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [selectedProfile, setSelectedProfile] = useState<PublicProfile | null>(
+    null,
+  );
+
+  function openProfile(p: PublicProfile) {
+    setSelectedProfile(p);
+    setProfileOpen(true);
+  }
 
   // Initiera rummet EN gång per roomId
   useEffect(() => {
@@ -31,6 +48,7 @@ export function RoomChat() {
         {messages.map((m) => (
           <MessageBubble key={m.id} msg={m} isMe={m.senderId === meId} />
         ))}
+
         <div ref={endRef} />
       </div>
     </div>

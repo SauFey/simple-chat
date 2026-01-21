@@ -16,7 +16,6 @@ function extFromFile(file: File) {
 
 export async function uploadAvatar(userId: string, file: File) {
   const sb = requireSupabase();
-
   const ext = extFromFile(file);
   const path = `${userId}/avatar-${Date.now()}.${ext}`;
 
@@ -27,12 +26,11 @@ export async function uploadAvatar(userId: string, file: File) {
   if (error) throw error;
 
   const { data } = sb.storage.from("avatars").getPublicUrl(path);
-  return data.publicUrl;
+  return { url: data.publicUrl, path };
 }
 
 export async function uploadProfilePhoto(userId: string, file: File) {
   const sb = requireSupabase();
-
   const ext = extFromFile(file);
   const path = `${userId}/photo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
@@ -43,5 +41,19 @@ export async function uploadProfilePhoto(userId: string, file: File) {
   if (error) throw error;
 
   const { data } = sb.storage.from("profile-photos").getPublicUrl(path);
-  return data.publicUrl;
+  return { url: data.publicUrl, path };
+}
+
+export async function deleteAvatar(path: string) {
+  const sb = requireSupabase();
+  if (!path) return; // extern/default avatar
+  const { error } = await sb.storage.from("avatars").remove([path]);
+  if (error) throw error;
+}
+
+export async function deleteProfilePhoto(path: string) {
+  const sb = requireSupabase();
+  if (!path) return;
+  const { error } = await sb.storage.from("profile-photos").remove([path]);
+  if (error) throw error;
 }

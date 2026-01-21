@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { rooms } from "../data/mock";
+import { ROOMS } from "../data/rooms";
 
 export function RoomsList() {
   return (

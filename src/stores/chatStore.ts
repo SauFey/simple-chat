@@ -48,10 +48,11 @@ export type RelationshipStatus =
 export type MeProfile = {
   id: string;
   name: string;
-  avatarUrl?: string;
+  avatar?: StoredImage | null;
+  age?: number;
 
   // NYTT: fler bilder
-  photos: string[]; // objectURLs eller framtida riktiga URL:er
+  photos: StoredImage[]; // objectURLs eller framtida riktiga URL:er
 
   bio?: string;
   location?: string;
@@ -64,6 +65,7 @@ export type MeProfile = {
   orientationOtherText?: string;
 
   nsfwEnabled: boolean;
+  allowIncomingDms: boolean;
 };
 
 export type ChatMessage = {
@@ -73,6 +75,11 @@ export type ChatMessage = {
   senderName: string;
   avatarUrl?: string;
   createdAt: string; // ISO
+};
+
+export type StoredImage = {
+  url: string;
+  path: string; // storage path i bucket
 };
 
 type ChatStore = {
@@ -90,9 +97,14 @@ type ChatStore = {
   sendDmMessage: (dmId: string, text: string) => void;
 
   ensureRoom: (roomId: string) => void;
-  ensureDm: (dmId: string) => void;
+  ensureDm: (dmId: string, opts?: { initiatedByMe?: boolean }) => void;
 
   hydrateProfile: (profile: MeProfile) => void;
+
+  roomPresence: Record<string, number>;
+  onlineCount: number;
+  setRoomPresence: (roomId: string, count: number) => void;
+  setOnlineCount: (count: number) => void;
 };
 
 function uid() {
@@ -103,7 +115,11 @@ function uid() {
 const defaultMe = (): MeProfile => ({
   id: "me",
   name: "Suss",
-  avatarUrl: "https://api.dicebear.com/9.x/thumbs/svg?seed=Suss",
+  avatar: {
+    url: "https://api.dicebear.com/9.x/thumbs/svg?seed=Suss",
+    path: "", // tom = extern/default (inte i storage)
+  },
+  age: undefined,
 
   photos: [],
 
@@ -117,32 +133,38 @@ const defaultMe = (): MeProfile => ({
   orientations: ["PreferNotToSay"],
   orientationOtherText: "",
   nsfwEnabled: false,
+  allowIncomingDms: true,
 });
 
-const withDefaults = (p: Partial<MeProfile> | undefined): MeProfile => {
+const withDefaults = (p: any): MeProfile => {
   const d = defaultMe();
 
-  const merged: MeProfile = {
+  // Gamla avatarUrl -> nya avatar
+  const avatarFromOld =
+    typeof p?.avatarUrl === "string" ? { url: p.avatarUrl, path: "" } : null;
+
+  // Gamla photos: string[] -> nya photos: StoredImage[]
+  const photosFromOld =
+    Array.isArray(p?.photos) && typeof p.photos[0] === "string"
+      ? (p.photos as string[]).map((u) => ({ url: u, path: "" }))
+      : null;
+
+  return {
     ...d,
     ...(p ?? {}),
-    // skydda arrays
-    photos: Array.isArray(p?.photos) ? p!.photos : d.photos,
+    avatar: (p?.avatar ?? avatarFromOld ?? d.avatar) as any,
+    photos: (Array.isArray(p?.photos)
+      ? p.photos
+      : (photosFromOld ?? d.photos)) as any,
     orientations: Array.isArray(p?.orientations)
-      ? p!.orientations
+      ? p.orientations
       : d.orientations,
+
+    allowIncomingDms:
+      typeof p?.allowIncomingDms === "boolean"
+        ? p.allowIncomingDms
+        : d.allowIncomingDms,
   };
-
-  // skydda dropdowns så de alltid har giltiga värden
-  if (!merged.pronouns) merged.pronouns = d.pronouns;
-  if (!merged.genderIdentity) merged.genderIdentity = d.genderIdentity;
-  if (!merged.relationshipStatus)
-    merged.relationshipStatus = d.relationshipStatus;
-
-  // skydda boolean
-  if (typeof (p as any)?.nsfwEnabled !== "boolean")
-    merged.nsfwEnabled = d.nsfwEnabled;
-
-  return merged;
 };
 
 export const useChatStore = create<ChatStore>()(
@@ -150,6 +172,20 @@ export const useChatStore = create<ChatStore>()(
     (set, get) => ({
       meSaved: defaultMe(),
       meDraft: defaultMe(),
+
+      roomPresence: {
+        general: 12,
+        girls: 7,
+        boys: 9,
+      },
+      onlineCount: 23,
+
+      setRoomPresence: (roomId, count) =>
+        set((s) => ({
+          roomPresence: { ...s.roomPresence, [roomId]: count },
+        })),
+
+      setOnlineCount: (count) => set(() => ({ onlineCount: count })),
 
       setMeDraft: (patch) =>
         set((state) => ({
@@ -210,9 +246,17 @@ export const useChatStore = create<ChatStore>()(
           };
         }),
 
-      ensureDm: (dmId) =>
+      ensureDm: (dmId, opts) =>
         set((state) => {
+          const initiatedByMe = opts?.initiatedByMe ?? false;
+
+          // Om någon annan försöker starta en DM med mig och jag har stängt av:
+          if (!initiatedByMe && state.meSaved.allowIncomingDms === false) {
+            return state; // gör ingenting
+          }
+
           if (state.dmMessages[dmId]) return state;
+
           return {
             dmMessages: {
               ...state.dmMessages,
@@ -231,7 +275,7 @@ export const useChatStore = create<ChatStore>()(
           text: msgText,
           senderId: meSaved.id,
           senderName: meSaved.name,
-          avatarUrl: meSaved.avatar,
+          avatarUrl: meSaved.avatar?.url,
           createdAt: new Date().toISOString(),
         };
 
@@ -253,7 +297,7 @@ export const useChatStore = create<ChatStore>()(
           text: msgText,
           senderId: meSaved.id,
           senderName: meSaved.name,
-          avatarUrl: meSaved.avatarUrl,
+          avatarUrl: meSaved.avatar?.url,
           createdAt: new Date().toISOString(),
         };
 
@@ -276,10 +320,7 @@ export const useChatStore = create<ChatStore>()(
         if (!state) return;
 
         const migrated = withDefaults(state.meSaved as any);
-
-        // Uppdatera store-state “på riktigt” via set (säkrare än att mutera state direkt)
-        state.meSaved = migrated;
-        state.meDraft = { ...migrated };
+        state.hydrateProfile(migrated);
       },
     },
   ),

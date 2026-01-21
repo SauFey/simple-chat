@@ -1,4 +1,5 @@
 import type { ChatMessage } from "../../stores/chatStore";
+import { UserLink } from "../user/UserLink";
 
 function formatTime(iso: string) {
   const d = new Date(iso);
@@ -12,24 +13,37 @@ export function MessageBubble({
   msg: ChatMessage;
   isMe: boolean;
 }) {
+  const profile = {
+    id: msg.senderId,
+    name: msg.senderName,
+    avatarUrl: msg.avatarUrl,
+    // TODO: koppla riktiga fält senare
+    location: undefined,
+    age: undefined,
+    isMe,
+  };
+
   return (
     <div className={`flex gap-2 ${isMe ? "justify-end" : "justify-start"}`}>
+      {/* Avatar vänster */}
       {!isMe && (
-        <img
-          src={msg.avatarUrl}
-          alt={msg.senderName}
-          className="h-9 w-9 rounded-full border object-cover"
+        <UserLink
+          profile={profile}
+          showAvatar
+          showName={false}
+          className="shrink-0"
         />
       )}
 
       <div
         className={`max-w-[80%] ${isMe ? "items-end" : "items-start"} flex flex-col`}
       >
+        {/* Namn + tid (klickbart namn) */}
         <div
           className={`flex items-baseline gap-2 ${isMe ? "justify-end" : ""}`}
         >
-          <span className="text-xs font-medium">{msg.senderName}</span>
-          <span className="text-[11px] text-muted-foreground">
+          <UserLink profile={profile} showAvatar={false} showName />
+          <span className="text-xs text-muted-foreground">
             {formatTime(msg.createdAt)}
           </span>
         </div>
@@ -37,11 +51,13 @@ export function MessageBubble({
         <div className="rounded-2xl border px-3 py-2 text-sm">{msg.text}</div>
       </div>
 
+      {/* Avatar höger */}
       {isMe && (
-        <img
-          src={msg.avatarUrl}
-          alt={msg.senderName}
-          className="h-9 w-9 rounded-full border object-cover"
+        <UserLink
+          profile={profile}
+          showAvatar
+          showName={false}
+          className="shrink-0"
         />
       )}
     </div>

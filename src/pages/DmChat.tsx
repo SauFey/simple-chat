@@ -2,6 +2,11 @@ import { useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { useChatStore } from "../stores/chatStore";
 import { MessageBubble } from "../components/ui/messagebubble";
+import { useState } from "react";
+import { ProfilePreviewModal } from "../components/profile/ProfilePreviewModal";
+import { type PublicProfile } from "@/stores/uiStore";
+
+const EMPTY_MESSAGES: any[] = [];
 
 export function DmChat() {
   const { id } = useParams();
@@ -9,7 +14,17 @@ export function DmChat() {
 
   const ensureDm = useChatStore((s) => s.ensureDm);
   const meId = useChatStore((s) => s.meSaved.id);
-  const messages = useChatStore((s) => s.dmMessages[dmId] ?? []);
+  const messages = useChatStore((s) => s.dmMessages[dmId] ?? EMPTY_MESSAGES);
+
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [selectedProfile, setSelectedProfile] = useState<PublicProfile | null>(
+    null,
+  );
+
+  function openProfile(p: PublicProfile) {
+    setSelectedProfile(p);
+    setProfileOpen(true);
+  }
 
   useEffect(() => {
     ensureDm(dmId);

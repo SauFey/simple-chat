@@ -231,7 +231,7 @@ export const useChatStore = create<ChatStore>()(
           text: msgText,
           senderId: meSaved.id,
           senderName: meSaved.name,
-          avatarUrl: meSaved.avatarUrl,
+          avatarUrl: meSaved.avatar,
           createdAt: new Date().toISOString(),
         };
 

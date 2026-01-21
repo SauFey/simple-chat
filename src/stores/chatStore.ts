@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import type { PublicProfile } from "@/stores/uiStore";
 
 export type Orientation =
   | "Gay"
@@ -45,6 +46,15 @@ export type RelationshipStatus =
   | "öppet förhållande"
   | "vill inte ange";
 
+export type DmRequest = {
+  id: string; // request id
+  fromUserId: string;
+  fromName: string;
+  fromAvatarUrl?: string;
+  createdAt: string; // ISO
+};
+
+export type AccountType = "guest" | "member" | "verified";
 export type MeProfile = {
   id: string;
   name: string;
@@ -58,14 +68,20 @@ export type MeProfile = {
   location?: string;
 
   pronouns: Pronouns;
-  genderIdentity: GenderIdentityPreset;
+  genderIdentity?: string;
   relationshipStatus: RelationshipStatus;
+  genderChangedAt?: string; // ISO när kön senast ändrades
+  genderLocked?: boolean;
+  remainingMs?: number;
 
   orientations: Orientation[];
   orientationOtherText?: string;
 
   nsfwEnabled: boolean;
   allowIncomingDms: boolean;
+
+  accountType: AccountType;
+  guestExpiresAt?: string; // ISO datetime
 };
 
 export type ChatMessage = {
@@ -93,6 +109,9 @@ type ChatStore = {
   roomMessages: Record<string, ChatMessage[]>;
   dmMessages: Record<string, ChatMessage[]>;
 
+  roomParticipants: Record<string, PublicProfile[]>;
+  setRoomParticipants: (roomId: string, users: PublicProfile[]) => void;
+
   sendRoomMessage: (roomId: string, text: string) => void;
   sendDmMessage: (dmId: string, text: string) => void;
 
@@ -105,6 +124,14 @@ type ChatStore = {
   onlineCount: number;
   setRoomPresence: (roomId: string, count: number) => void;
   setOnlineCount: (count: number) => void;
+
+  dmRequests: DmRequest[];
+  sendDmRequest: (toUserId: string, toName: string) => void;
+  acceptDmRequest: (requestId: string) => void;
+  declineDmRequest: (requestId: string) => void;
+
+  blockedUserIds: string[];
+  blockUser: (userId: string) => void;
 };
 
 function uid() {
@@ -129,11 +156,15 @@ const defaultMe = (): MeProfile => ({
   pronouns: "Välj…",
   genderIdentity: "Välj…",
   relationshipStatus: "Välj…",
+  genderChangedAt: undefined,
 
   orientations: ["PreferNotToSay"],
   orientationOtherText: "",
   nsfwEnabled: false,
   allowIncomingDms: true,
+
+  accountType: "guest",
+  guestExpiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000).toISOString(),
 });
 
 const withDefaults = (p: any): MeProfile => {
@@ -167,11 +198,38 @@ const withDefaults = (p: any): MeProfile => {
   };
 };
 
+function isGuestExpired(me: MeProfile) {
+  if (me.accountType !== "guest") return false;
+  if (!me.guestExpiresAt) return false;
+  return Date.now() > new Date(me.guestExpiresAt).getTime();
+}
+
+const GENDER_COOLDOWN_DAYS = 7;
+
+function genderCooldownMs() {
+  return GENDER_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+}
+
+export function canChangeGender(meSaved: { genderChangedAt?: string }) {
+  if (!meSaved.genderChangedAt) return true;
+  const last = new Date(meSaved.genderChangedAt).getTime();
+  return Date.now() - last >= genderCooldownMs();
+}
+
+export function genderRemainingMs(meSaved: { genderChangedAt?: string }) {
+  if (!meSaved.genderChangedAt) return 0;
+  const last = new Date(meSaved.genderChangedAt).getTime();
+  const remaining = genderCooldownMs() - (Date.now() - last);
+  return Math.max(0, remaining);
+}
+
 export const useChatStore = create<ChatStore>()(
   persist(
     (set, get) => ({
       meSaved: defaultMe(),
       meDraft: defaultMe(),
+      dmRequests: [],
+      blockedUserIds: [],
 
       roomPresence: {
         general: 12,
@@ -187,15 +245,43 @@ export const useChatStore = create<ChatStore>()(
 
       setOnlineCount: (count) => set(() => ({ onlineCount: count })),
 
+      roomParticipants: {},
+      setRoomParticipants: (roomId, users) =>
+        set((s) => ({
+          roomParticipants: { ...s.roomParticipants, [roomId]: users },
+        })),
       setMeDraft: (patch) =>
         set((state) => ({
           meDraft: { ...state.meDraft, ...patch },
         })),
 
       saveMe: () =>
-        set((state) => ({
-          meSaved: { ...state.meDraft },
-        })),
+        set((state) => {
+          const prev = state.meSaved;
+          const next = { ...state.meDraft };
+
+          const genderChanged =
+            (prev.genderIdentity ?? "") !== (next.genderIdentity ?? "");
+
+          // Om användaren försöker ändra under cooldown: neka (behåll gamla)
+          if (genderChanged && !canChangeGender(prev)) {
+            next.genderIdentity = prev.genderIdentity; // revert bara den
+            // (valfritt) du kan också sätta en ui-flagga för toast
+          }
+
+          // Om ändring är tillåten och faktiskt ändrades: stämpla
+          if (genderChanged && canChangeGender(prev)) {
+            next.genderChangedAt = new Date().toISOString();
+          } else {
+            // behåll tidigare timestamp om ingen ny ändring
+            next.genderChangedAt = prev.genderChangedAt;
+          }
+
+          return {
+            meSaved: next,
+            meDraft: { ...next }, // så UI syncar efter save
+          };
+        }),
 
       resetMeDraft: () =>
         set((state) => ({
@@ -237,13 +323,38 @@ export const useChatStore = create<ChatStore>()(
 
       ensureRoom: (roomId) =>
         set((state) => {
-          if (state.roomMessages[roomId]) return state;
-          return {
-            roomMessages: {
-              ...state.roomMessages,
-              [roomId]: [],
-            },
-          };
+          const hasMessages = !!state.roomMessages[roomId];
+          const hasParticipants = !!state.roomParticipants[roomId];
+
+          const next: any = {};
+          if (!hasMessages)
+            next.roomMessages = { ...state.roomMessages, [roomId]: [] };
+
+          if (!hasParticipants) {
+            // MVP: mock-deltagare (byt senare till riktig presence)
+            next.roomParticipants = {
+              ...state.roomParticipants,
+              [roomId]: [
+                {
+                  id: "sam",
+                  name: "Sam",
+                  avatarUrl: "https://api.dicebear.com/9.x/thumbs/svg?seed=Sam",
+                  location: "Stockholm",
+                  age: 29,
+                },
+                {
+                  id: "alex",
+                  name: "Alex",
+                  avatarUrl:
+                    "https://api.dicebear.com/9.x/thumbs/svg?seed=Alex",
+                  location: "Göteborg",
+                  age: 26,
+                },
+              ],
+            };
+          }
+
+          return Object.keys(next).length ? next : state;
         }),
 
       ensureDm: (dmId, opts) =>
@@ -308,6 +419,54 @@ export const useChatStore = create<ChatStore>()(
           },
         }));
       },
+
+      sendDmRequest: (toUserId, toName) =>
+        set((state) => {
+          // om mottagaren blockat dig (lokalt kan vi bara blocka utgående i din klient,
+          // men vi håller logiken ändå)
+          if (state.blockedUserIds.includes(toUserId)) return state;
+
+          // skapa request som om "du" skickar till någon annan.
+          // I riktig multi-user värld hamnar den hos mottagaren via backend.
+          // För MVP kan vi lägga den i en lokal “inkorg” för demo (eller i en mock).
+          const req: DmRequest = {
+            id: crypto.randomUUID(),
+            fromUserId: state.meSaved.id,
+            fromName: state.meSaved.name,
+            fromAvatarUrl: state.meSaved.avatar?.url,
+            createdAt: new Date().toISOString(),
+          };
+
+          // MVP: lägg request i din egen lista så du kan bygga UI:t och flödet.
+          return { dmRequests: [req, ...state.dmRequests] };
+        }),
+
+      acceptDmRequest: (requestId) =>
+        set((state) => {
+          const req = state.dmRequests.find((r) => r.id === requestId);
+          if (!req) return state;
+
+          const dmId = req.fromUserId;
+          return {
+            dmRequests: state.dmRequests.filter((r) => r.id !== requestId),
+            dmMessages: state.dmMessages[dmId]
+              ? state.dmMessages
+              : { ...state.dmMessages, [dmId]: [] },
+          };
+        }),
+
+      declineDmRequest: (requestId) =>
+        set((state) => ({
+          dmRequests: state.dmRequests.filter((r) => r.id !== requestId),
+        })),
+
+      blockUser: (userId) =>
+        set((state) => ({
+          blockedUserIds: Array.from(
+            new Set([...state.blockedUserIds, userId]),
+          ),
+          dmRequests: state.dmRequests.filter((r) => r.fromUserId !== userId),
+        })),
     }),
     {
       name: "simple-chat-store",

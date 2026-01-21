@@ -3,9 +3,11 @@ import {
   useChatStore,
   type Orientation,
   type Pronouns,
+  canChangeGender,
+  genderRemainingMs,
   type GenderIdentityPreset,
   type RelationshipStatus,
-} from "../stores/chatStore";
+} from "@/stores/chatStore";
 
 import { uploadAvatar, uploadProfilePhoto } from "../lib/storage";
 import { deleteProfilePhoto } from "../lib/storage";
@@ -100,13 +102,17 @@ export function Profile() {
   const saveMe = useChatStore((s) => s.saveMe);
   const remaining = MAX_PHOTOS - (meDraft.photos?.length ?? 0);
   const limitedFiles = meDraft.photos?.slice(0, Math.max(0, remaining));
+  const isGuest = meSaved.accountType === "guest";
+  const genderLocked = !canChangeGender(meSaved);
+  const remainingMs = genderRemainingMs(meSaved);
+  const remainingDays = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
 
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // “Sparat ✅”
+  // “Sparat ✅”S
   const [savedPulse, setSavedPulse] = useState(false);
 
   const avatarSrc =
@@ -329,81 +335,85 @@ export function Profile() {
       </section>
 
       {/* Fler bilder */}
-      <section className="rounded-lg border p-4 space-y-3">
-        <div className="font-medium">Bilder</div>
-        <div className="text-sm text-muted-foreground">
-          Lägg till fler bilder (sparas lokalt i appen just nu).
-        </div>
+      {!isGuest && (
+        <section className="rounded-lg border p-3 text-sm text-muted-foreground">
+          Gästkonton kan bara ha profilbild. Claima ditt konto för att lägga
+          till fler bilder.
+          <div className="font-medium">Galleri</div>
+          <div className="text-sm text-muted-foreground">
+            Lägg till fler bilder (sparas lokalt i appen just nu).
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            {(meDraft.photos ?? []).map((photo, idx) => (
+              <div key={photo.url + idx} className="relative">
+                <img
+                  src={photo.url}
+                  alt={`Bild ${idx + 1}`}
+                  className="aspect-square w-full rounded-md border object-cover"
+                />
+                <button
+                  type="button"
+                  onClick={async () => {
+                    // Ta bort från UI direkt (snappy), sen storage
+                    const next = (meDraft.photos ?? []).filter(
+                      (p) => p !== photo,
+                    );
+                    setMe({ photos: next });
 
-        <div className="grid grid-cols-3 gap-2">
-          {(meDraft.photos ?? []).map((photo, idx) => (
-            <div key={photo.url + idx} className="relative">
-              <img
-                src={photo.url}
-                alt={`Bild ${idx + 1}`}
-                className="aspect-square w-full rounded-md border object-cover"
-              />
-              <button
-                type="button"
-                onClick={async () => {
-                  // Ta bort från UI direkt (snappy), sen storage
-                  const next = (meDraft.photos ?? []).filter(
-                    (p) => p !== photo,
-                  );
-                  setMe({ photos: next });
+                    // Revoke blob preview om det var en blob
+                    if (photo.url.startsWith("blob:")) {
+                      URL.revokeObjectURL(photo.url);
+                      photoObjectUrlsRef.current.delete(photo.url);
+                      return; // ingen storage-delete behövs
+                    }
 
-                  // Revoke blob preview om det var en blob
-                  if (photo.url.startsWith("blob:")) {
-                    URL.revokeObjectURL(photo.url);
-                    photoObjectUrlsRef.current.delete(photo.url);
-                    return; // ingen storage-delete behövs
-                  }
+                    // Om den har path: radera från storage
+                    try {
+                      await deleteProfilePhoto(photo.path);
+                    } catch (e) {
+                      console.error(e);
+                      // (valfritt) här kan du lägga tillbaka fotot om delete failar
+                    }
+                  }}
+                  className="absolute right-1 top-1 rounded-md border bg-background/90 px-2 py-1 text-xs"
+                  title="Ta bort"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
 
-                  // Om den har path: radera från storage
-                  try {
-                    await deleteProfilePhoto(photo.path);
-                  } catch (e) {
-                    console.error(e);
-                    // (valfritt) här kan du lägga tillbaka fotot om delete failar
-                  }
+            {/* Add-tile */}
+            <label className="flex aspect-square cursor-pointer items-center justify-center rounded-md border text-sm hover:bg-muted transition">
+              + Lägg till
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files ?? []);
+                  if (files.length === 0) return;
+
+                  setGalleryFiles((prev) => [...prev, ...files]);
+
+                  const previewItems = files.map((f) => {
+                    const u = URL.createObjectURL(f);
+                    photoObjectUrlsRef.current.add(u);
+                    return { url: u, path: "" };
+                  });
+
+                  setMe({
+                    photos: [...(meDraft.photos ?? []), ...previewItems],
+                  });
+
+                  e.currentTarget.value = "";
                 }}
-                className="absolute right-1 top-1 rounded-md border bg-background/90 px-2 py-1 text-xs"
-                title="Ta bort"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-
-          {/* Add-tile */}
-          <label className="flex aspect-square cursor-pointer items-center justify-center rounded-md border text-sm hover:bg-muted transition">
-            + Lägg till
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                const files = Array.from(e.target.files ?? []);
-                if (files.length === 0) return;
-
-                setGalleryFiles((prev) => [...prev, ...files]);
-
-                const previewItems = files.map((f) => {
-                  const u = URL.createObjectURL(f);
-                  photoObjectUrlsRef.current.add(u);
-                  return { url: u, path: "" };
-                });
-
-                setMe({ photos: [...(meDraft.photos ?? []), ...previewItems] });
-
-                e.currentTarget.value = "";
-              }}
-            />
-          </label>
-        </div>
-      </section>
-
+              />
+            </label>
+          </div>
+        </section>
+      )}
       {/* Identitet via dropdowns */}
       <section className="rounded-lg border p-4 space-y-3">
         <div className="font-medium">Identitet</div>
@@ -427,20 +437,23 @@ export function Profile() {
           <div>
             <div className="text-sm font-medium">Könsidentitet</div>
             <select
-              value={meDraft.genderIdentity}
-              onChange={(e) =>
-                setMe({
-                  genderIdentity: e.target.value as GenderIdentityPreset,
-                })
-              }
-              className="mt-1 w-full rounded-md border bg-background px-2 py-2 text-sm"
+              value={meDraft.genderIdentity ?? ""}
+              disabled={genderLocked}
+              onChange={(e) => setMe({ genderIdentity: e.target.value })}
+              className="mt-1 w-full rounded-md border bg-background px-2 py-2 text-sm disabled:opacity-60"
             >
-              {GENDER_OPTIONS.map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
+              <option value="">Välj…</option>
+              <option value="Kvinna">Kvinna</option>
+              <option value="Man">Man</option>
+              <option value="Icke-binär">Icke-binär</option>
+              <option value="Annat">Annat</option>
             </select>
+
+            {genderLocked && (
+              <div className="mt-1 text-xs text-muted-foreground">
+                Du kan ändra igen om cirka {remainingDays} dag(ar).
+              </div>
+            )}
           </div>
         </div>
       </section>

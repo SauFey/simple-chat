@@ -26,6 +26,8 @@ export function ProfilePreviewModal() {
   const expand = useUiStore((s) => s.expandProfile);
   const collapse = useUiStore((s) => s.collapseProfile);
 
+  const sendDmRequest = useChatStore((s) => s.sendDmRequest);
+
   // ✅ Hooks som alltid ska köras: media viewer
   const [mediaOpen, setMediaOpen] = useState(false);
   const [mediaIndex, setMediaIndex] = useState(0);
@@ -83,9 +85,9 @@ export function ProfilePreviewModal() {
   if (!open || !effective) return null;
 
   function startPm() {
-    ensureDm(effective.id, { initiatedByMe: true });
+    sendDmRequest(effective.id, effective.name);
     close();
-    navigate(`/dm/${effective.id}`);
+    navigate("/dm"); // visa listan med requests (för demo)
   }
 
   function toggleExpanded() {

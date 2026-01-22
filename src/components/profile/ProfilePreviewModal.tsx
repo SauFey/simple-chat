@@ -9,14 +9,15 @@ type EffectiveProfile = {
   avatarUrl?: string;
   location?: string;
   age?: number;
+  bio?: string;
   photos: { url: string; path?: string }[];
 };
 
 export function ProfilePreviewModal() {
   const navigate = useNavigate();
 
-  const ensureDm = useChatStore((s) => s.ensureDm);
   const meSaved = useChatStore((s) => s.meSaved);
+  const sendDmRequest = useChatStore((s) => s.sendDmRequest);
 
   const open = useUiStore((s) => s.profileOpen);
   const expanded = useUiStore((s) => s.profileExpanded);
@@ -25,8 +26,6 @@ export function ProfilePreviewModal() {
   const close = useUiStore((s) => s.closeProfile);
   const expand = useUiStore((s) => s.expandProfile);
   const collapse = useUiStore((s) => s.collapseProfile);
-
-  const sendDmRequest = useChatStore((s) => s.sendDmRequest);
 
   // ✅ Hooks som alltid ska köras: media viewer
   const [mediaOpen, setMediaOpen] = useState(false);
@@ -52,6 +51,7 @@ export function ProfilePreviewModal() {
         avatarUrl: meSaved.avatar?.url,
         location: meSaved.location,
         age: (meSaved as any)?.age,
+        bio: meSaved.bio ?? "",
         photos: (meSaved.photos ?? []).map((p: any) => ({
           url: p.url,
           path: p.path,
@@ -65,7 +65,8 @@ export function ProfilePreviewModal() {
       avatarUrl: profile.avatarUrl,
       location: profile.location,
       age: profile.age,
-      photos: [],
+      bio: (profile as any)?.bio ?? "",
+      photos: (profile as any)?.photos ?? [],
     };
   }, [profile, meSaved]);
 
@@ -95,6 +96,10 @@ export function ProfilePreviewModal() {
     else expand();
   }
 
+  const bioText = (effective.bio ?? "").trim();
+  const collapsedBio =
+    bioText.length > 120 ? bioText.slice(0, 120).trim() + "…" : bioText;
+
   return (
     <div className="fixed inset-0 z-50">
       <button
@@ -103,16 +108,20 @@ export function ProfilePreviewModal() {
         onClick={close}
       />
 
+      {/* Modal container: botten-sheet när collapsed, fullscreen när expanded */}
       <div
         className={[
-          "absolute inset-x-0 bottom-0 mx-auto w-full max-w-md overflow-hidden border bg-background shadow-xl transition-all duration-300",
-          expanded ? "h-[92dvh] rounded-t-2xl" : "h-[55dvh] rounded-t-2xl",
+          "absolute mx-auto w-full max-w-md border bg-background shadow-xl transition-all duration-300",
+          expanded
+            ? "inset-0 rounded-none" // ✅ fullscreen
+            : "inset-x-0 bottom-0 h-[55dvh] rounded-t-2xl overflow-hidden", // ✅ sheet
         ].join(" ")}
       >
+        {/* Header gradient */}
         <div
           className={[
             "relative bg-gradient-to-r from-fuchsia-500/30 via-indigo-500/30 to-sky-500/30",
-            expanded ? "h-28" : "h-16",
+            expanded ? "h-36" : "h-16",
           ].join(" ")}
         >
           <button
@@ -123,6 +132,7 @@ export function ProfilePreviewModal() {
           </button>
         </div>
 
+        {/* Drag handle / toggle */}
         <button
           type="button"
           onClick={toggleExpanded}
@@ -133,8 +143,10 @@ export function ProfilePreviewModal() {
           <div className="h-1.5 w-10 rounded-full bg-muted-foreground/30" />
         </button>
 
-        <div className={expanded ? "h-full overflow-y-auto" : "h-full"}>
-          <div className={(expanded ? "-mt-12" : "-mt-8") + " p-4 pb-6"}>
+        {/* Content */}
+        <div className="h-[calc(100%-64px)] overflow-y-auto">
+          {/* ✅ Mindre “dra upp” i expanded (för att inte klippa avatar) */}
+          <div className={(expanded ? "-mt-10" : "-mt-5") + " p-4 pb-6"}>
             <div className="flex items-end gap-3">
               <button
                 type="button"
@@ -150,8 +162,10 @@ export function ProfilePreviewModal() {
                   src={avatarSrc}
                   alt={effective.name}
                   className={[
-                    "rounded-full border bg-background object-contain transition-all duration-300",
-                    expanded ? "h-28 w-28" : "h-20 w-20",
+                    "rounded-full border bg-background",
+                    expanded ? "h-32 w-32" : "h-28 w-28",
+                    // ✅ behåll cover men fokusera toppen (slipper halvt huvud)
+                    "object-cover object-top",
                   ].join(" ")}
                 />
               </button>
@@ -182,12 +196,14 @@ export function ProfilePreviewModal() {
               </div>
             </div>
 
+            {/* Överblick med riktig bio */}
             <div className="mt-4 rounded-lg border p-3">
               <div className="text-sm font-medium">Överblick</div>
-              <div className="mt-1 text-sm text-muted-foreground">
+              <div className="mt-1 text-sm text-muted-foreground whitespace-pre-wrap">
                 {expanded
-                  ? "Här kan vi visa bio, pronomen, intressen, badges osv."
-                  : "Snabb överblick. Tryck “Visa profil” för mer."}
+                  ? bioText || "Ingen bio angiven ännu."
+                  : collapsedBio ||
+                    "Snabb överblick. Tryck “Visa profil” för mer."}
               </div>
             </div>
 
@@ -257,6 +273,7 @@ export function ProfilePreviewModal() {
         </div>
       </div>
 
+      {/* Media viewer */}
       {mediaOpen && (
         <div className="fixed inset-0 z-[60]">
           <button
@@ -265,47 +282,43 @@ export function ProfilePreviewModal() {
             onClick={() => setMediaOpen(false)}
           />
           <div className="absolute inset-0 mx-auto w-full max-w-md bg-background shadow-xl">
-            <div className="absolute inset-0 mx-auto w-full max-w-md bg-background">
-              <div className="flex items-center justify-between border-b p-3">
-                <div className="text-sm font-medium">
-                  Bild {mediaIndex + 1} / {mediaItems.length}
-                </div>
-                <button
-                  className="rounded-md border px-2 py-1 text-sm hover:bg-muted transition"
-                  onClick={() => setMediaOpen(false)}
-                >
-                  ✕
-                </button>
+            <div className="flex items-center justify-between border-b p-3">
+              <div className="text-sm font-medium">
+                Bild {mediaIndex + 1} / {mediaItems.length}
               </div>
+              <button
+                className="rounded-md border px-2 py-1 text-sm hover:bg-muted transition"
+                onClick={() => setMediaOpen(false)}
+              >
+                ✕
+              </button>
+            </div>
 
-              <div className="p-3">
-                <img
-                  src={mediaItems[mediaIndex]?.url}
-                  alt="Bild"
-                  className="w-full rounded-xl border object-contain"
-                  style={{ maxHeight: "70dvh" }}
-                />
+            <div className="p-3">
+              <img
+                src={mediaItems[mediaIndex]?.url}
+                alt="Bild"
+                className="w-full rounded-xl border object-contain"
+                style={{ maxHeight: "70dvh" }}
+              />
 
-                <div className="mt-3 flex gap-2">
-                  <button
-                    className="h-10 w-full rounded-md border text-sm hover:bg-muted transition disabled:opacity-50"
-                    onClick={() => setMediaIndex((i) => Math.max(0, i - 1))}
-                    disabled={mediaIndex === 0}
-                  >
-                    Föregående
-                  </button>
-                  <button
-                    className="h-10 w-full rounded-md border text-sm hover:bg-muted transition disabled:opacity-50"
-                    onClick={() =>
-                      setMediaIndex((i) =>
-                        Math.min(mediaItems.length - 1, i + 1),
-                      )
-                    }
-                    disabled={mediaIndex === mediaItems.length - 1}
-                  >
-                    Nästa
-                  </button>
-                </div>
+              <div className="mt-3 flex gap-2">
+                <button
+                  className="h-10 w-full rounded-md border text-sm hover:bg-muted transition disabled:opacity-50"
+                  onClick={() => setMediaIndex((i) => Math.max(0, i - 1))}
+                  disabled={mediaIndex === 0}
+                >
+                  Föregående
+                </button>
+                <button
+                  className="h-10 w-full rounded-md border text-sm hover:bg-muted transition disabled:opacity-50"
+                  onClick={() =>
+                    setMediaIndex((i) => Math.min(mediaItems.length - 1, i + 1))
+                  }
+                  disabled={mediaIndex === mediaItems.length - 1}
+                >
+                  Nästa
+                </button>
               </div>
             </div>
           </div>

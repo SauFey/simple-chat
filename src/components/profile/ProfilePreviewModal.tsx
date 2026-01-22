@@ -150,7 +150,7 @@ export function ProfilePreviewModal() {
                   src={avatarSrc}
                   alt={effective.name}
                   className={[
-                    "rounded-full border bg-background object-cover transition-all duration-300",
+                    "rounded-full border bg-background object-contain transition-all duration-300",
                     expanded ? "h-28 w-28" : "h-20 w-20",
                   ].join(" ")}
                 />
@@ -264,8 +264,8 @@ export function ProfilePreviewModal() {
             aria-label="Stäng bilder"
             onClick={() => setMediaOpen(false)}
           />
-          <div className="absolute inset-x-0 top-10 mx-auto w-full max-w-md px-4">
-            <div className="relative overflow-hidden rounded-2xl border bg-background shadow-xl">
+          <div className="absolute inset-0 mx-auto w-full max-w-md bg-background shadow-xl">
+            <div className="absolute inset-0 mx-auto w-full max-w-md bg-background">
               <div className="flex items-center justify-between border-b p-3">
                 <div className="text-sm font-medium">
                   Bild {mediaIndex + 1} / {mediaItems.length}

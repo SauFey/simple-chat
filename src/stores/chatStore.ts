@@ -1,8 +1,9 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { PublicProfile } from "@/stores/uiStore";
+import { promises } from "dns";
 
-export type Orientation =
+export type ORIENTATION =
   | "Gay"
   | "Lesbian"
   | "Bisexual"
@@ -15,44 +16,45 @@ export type Orientation =
   | "Other"
   | "PreferNotToSay";
 
-export type Pronouns =
-  | "Välj…"
-  | "han/honom"
-  | "hon/henne"
-  | "hen"
-  | "de/dem"
-  | "annat"
-  | "vill inte ange";
+export const PRONOUN_OPTIONS = [
+  { value: "", label: "Välj…" },
+  { value: "han_honom", label: "Han/Honom" },
+  { value: "hon_henne", label: "Hon/Henne" },
+  { value: "hen", label: "Hen" },
+  { value: "de_dem", label: "De/Dem" },
+  { value: "annat", label: "Annat" },
+  { value: "vill_inte_ange", label: "Vill inte ange" },
+] as const;
 
-export type GenderIdentityPreset =
-  | "Välj…"
-  | "kvinna"
-  | "man"
-  | "icke-binär"
-  | "transkvinna"
-  | "transman"
-  | "genderfluid"
-  | "agender"
-  | "annat"
-  | "vill inte ange";
+export type Pronouns = (typeof PRONOUN_OPTIONS)[number]["value"];
 
-export type RelationshipStatus =
-  | "Välj…"
-  | "singel"
-  | "i relation"
-  | "gift"
-  | "förlovad"
-  | "det är komplicerat"
-  | "öppet förhållande"
-  | "vill inte ange";
+export const GENDER_OPTIONS = [
+  { value: "", label: "Välj…" },
+  { value: "kvinna", label: "Kvinna" },
+  { value: "man", label: "Man" },
+  { value: "icke_binar", label: "Icke-binär" },
+  { value: "transkvinna", label: "Transkvinna" },
+  { value: "transman", label: "Transman" },
+  { value: "genderfluid", label: "Genderfluid" },
+  { value: "agender", label: "Agender" },
+  { value: "annat", label: "Annat" },
+  { value: "vill_inte_ange", label: "Vill inte ange" },
+] as const;
 
-export type DmRequest = {
-  id: string; // request id
-  fromUserId: string;
-  fromName: string;
-  fromAvatarUrl?: string;
-  createdAt: string; // ISO
-};
+export type GenderIdentityPreset = (typeof GENDER_OPTIONS)[number]["value"];
+
+export const REL_STATUS_OPTIONS = [
+  { value: "", label: "Välj…" },
+  { value: "singel", label: "Singel" },
+  { value: "i_en_relation", label: "I en relation" },
+  { value: "gift", label: "Gift" },
+  { value: "forlovad", label: "Förlovad" },
+  { value: "komplicerat", label: "Det är komplicerat" },
+  { value: "oppet_forhallande", label: "Öppet förhållande" },
+  { value: "vill_inte_ange", label: "Vill inte ange" },
+] as const;
+
+export type RelationshipStatus = (typeof REL_STATUS_OPTIONS)[number]["value"];
 
 export type AccountType = "guest" | "member" | "verified";
 export type MeProfile = {
@@ -67,14 +69,14 @@ export type MeProfile = {
   bio?: string;
   location?: string;
 
-  pronouns: Pronouns;
+  pronouns?: string;
   genderIdentity?: string;
-  relationshipStatus: RelationshipStatus;
+  relationshipStatus?: string;
   genderChangedAt?: string; // ISO när kön senast ändrades
   genderLocked?: boolean;
   remainingMs?: number;
 
-  orientations: Orientation[];
+  orientations: ORIENTATION[];
   orientationOtherText?: string;
 
   nsfwEnabled: boolean;
@@ -134,6 +136,14 @@ type ChatStore = {
   blockUser: (userId: string) => void;
 };
 
+export type DmRequest = {
+  id: string; // request id
+  fromUserId: string;
+  fromName: string;
+  fromAvatarUrl?: string;
+  createdAt: string; // ISO
+};
+
 function uid() {
   // Bra nog för frontend-mock. Byt till crypto.randomUUID() om du vill.
   return Math.random().toString(36).slice(2, 10);
@@ -153,7 +163,7 @@ const defaultMe = (): MeProfile => ({
   bio: "",
   location: "",
 
-  pronouns: "Välj…",
+  pronouns: "Välj..",
   genderIdentity: "Välj…",
   relationshipStatus: "Välj…",
   genderChangedAt: undefined,
@@ -187,14 +197,28 @@ const withDefaults = (p: any): MeProfile => {
     photos: (Array.isArray(p?.photos)
       ? p.photos
       : (photosFromOld ?? d.photos)) as any,
-    orientations: Array.isArray(p?.orientations)
+    orientations: Array.isArray(p.orientations)
       ? p.orientations
-      : d.orientations,
+      : ["PreferNotToSay"],
 
     allowIncomingDms:
       typeof p?.allowIncomingDms === "boolean"
         ? p.allowIncomingDms
         : d.allowIncomingDms,
+
+    relationshipStatus:
+      typeof p?.relationshipStatus === "string"
+        ? p.relationshipStatus
+        : typeof p?.relationshipStatus === "string"
+          ? p.relationshipStatus
+          : d.relationshipStatus,
+
+    genderIdentity:
+      typeof p?.genderIdentity === "string"
+        ? p.genderIdentity
+        : d.genderIdentity,
+
+    pronouns: typeof p?.pronouns === "string" ? p.pronouns : d.pronouns,
   };
 };
 
@@ -277,8 +301,17 @@ export const useChatStore = create<ChatStore>()(
             next.genderChangedAt = prev.genderChangedAt;
           }
 
+          if (
+            typeof (next as any).relationshipStatus === "string" &&
+            ["välj...", "välj…", "choose...", "choose…"].includes(
+              (next as any).relationshipStatus.trim().toLowerCase(),
+            )
+          ) {
+            (next as any).relationshipStatus = "";
+          }
+
           return {
-            meSaved: next,
+            meSaved: { ...state.meDraft },
             meDraft: { ...next }, // så UI syncar efter save
           };
         }),

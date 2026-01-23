@@ -2,6 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useChatStore } from "../../stores/chatStore";
 import { useUiStore } from "../../stores/uiStore";
+import {
+  REL_STATUS_OPTIONS,
+  GENDER_OPTIONS,
+  PRONOUN_OPTIONS,
+} from "../../stores/chatStore";
 
 type EffectiveProfile = {
   id: string;
@@ -10,6 +15,11 @@ type EffectiveProfile = {
   location?: string;
   age?: number;
   bio?: string;
+  pronouns?: string;
+  orientations?: string[];
+  orientationOtherText?: string;
+  genderIdentity?: string;
+  relationshipStatus?: string;
   photos: { url: string; path?: string }[];
 };
 
@@ -22,7 +32,6 @@ export function ProfilePreviewModal() {
   const open = useUiStore((s) => s.profileOpen);
   const expanded = useUiStore((s) => s.profileExpanded);
   const profile = useUiStore((s) => s.selectedProfile);
-
   const close = useUiStore((s) => s.closeProfile);
   const expand = useUiStore((s) => s.expandProfile);
   const collapse = useUiStore((s) => s.collapseProfile);
@@ -30,6 +39,67 @@ export function ProfilePreviewModal() {
   // ✅ Hooks som alltid ska köras: media viewer
   const [mediaOpen, setMediaOpen] = useState(false);
   const [mediaIndex, setMediaIndex] = useState(0);
+  const [sent, setSent] = useState(false);
+
+  const effective: EffectiveProfile | null = useMemo(() => {
+    if (!profile) return null;
+    if (profile?.isMe) {
+      return {
+        id: meSaved.id,
+        name: meSaved.name,
+        avatarUrl: meSaved.avatar?.url,
+        location: meSaved.location,
+        age: (meSaved as any)?.age,
+        bio: meSaved.bio ?? "",
+        relationshipStatus: (meSaved as any).relationshipStatus ?? "",
+        genderIdentity: meSaved.genderIdentity ?? "",
+        pronouns: meSaved.pronouns ?? "",
+        orientations: (meSaved as any).orientations ?? [],
+        orientationOtherText: (meSaved as any).orientationOtherText ?? "",
+        photos: (meSaved.photos ?? []).map((p: any) => ({
+          url: p.url,
+          path: p.path,
+        })),
+      };
+    }
+    const p: any = profile;
+
+    return {
+      id: profile.id,
+      name: profile.name,
+      avatarUrl: profile.avatarUrl,
+      location: profile.location,
+      age: profile.age,
+      bio: p.bio ?? "",
+      relationshipStatus: p.relationshipStatus ?? "",
+      genderIdentity: p.genderIdentity ?? "",
+      pronouns: p.pronouns ?? "",
+      orientations: p.orientations ?? [],
+      orientationOtherText: p.orientationOtherText ?? "",
+      photos: p.photos ?? [],
+    };
+  }, [profile, meSaved]);
+
+  const relationshipStatus = (effective?.relationshipStatus ?? "").trim();
+  const showRelationshipStatus =
+    relationshipStatus !== "" &&
+    relationshipStatus.toLowerCase() !== "välj..." &&
+    relationshipStatus.toLowerCase() !== "välj...";
+
+  const avatarSrc =
+    effective?.avatarUrl || "https://api.dicebear.com/9.x/thumbs/svg?seed=User";
+
+  const mediaItems = useMemo(() => {
+    const photos = effective?.photos ?? [];
+    return [{ url: avatarSrc }, ...photos.map((p) => ({ url: p.url }))];
+  }, [effective?.photos, avatarSrc]);
+
+  const bioText = effective?.bio ?? "";
+  const collapsedBio =
+    bioText.length > 120 ? bioText.slice(0, 120).trim() + "…" : bioText;
+  const orientations: string[] = Array.isArray(effective?.orientations)
+    ? effective?.orientations
+    : [];
 
   useEffect(() => {
     if (!open) return;
@@ -41,53 +111,14 @@ export function ProfilePreviewModal() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open, close]);
 
-  const effective: EffectiveProfile | null = useMemo(() => {
-    if (!profile) return null;
-
-    if (profile.isMe) {
-      return {
-        id: meSaved.id,
-        name: meSaved.name,
-        avatarUrl: meSaved.avatar?.url,
-        location: meSaved.location,
-        age: (meSaved as any)?.age,
-        bio: meSaved.bio ?? "",
-        photos: (meSaved.photos ?? []).map((p: any) => ({
-          url: p.url,
-          path: p.path,
-        })),
-      };
-    }
-
-    return {
-      id: profile.id,
-      name: profile.name,
-      avatarUrl: profile.avatarUrl,
-      location: profile.location,
-      age: profile.age,
-      bio: (profile as any)?.bio ?? "",
-      photos: (profile as any)?.photos ?? [],
-    };
-  }, [profile, meSaved]);
-
-  const avatarSrc = useMemo(() => {
-    return (
-      effective?.avatarUrl ||
-      "https://api.dicebear.com/9.x/thumbs/svg?seed=User"
-    );
-  }, [effective?.avatarUrl]);
-
-  const mediaItems = useMemo(() => {
-    const photos = effective?.photos ?? [];
-    return [{ url: avatarSrc }, ...photos.map((p) => ({ url: p.url }))];
-  }, [effective?.photos, avatarSrc]);
-
+  if (!effective) return null;
   // ✅ Sista: return guards (efter alla hooks)
   if (!open || !effective) return null;
 
   function startPm() {
     sendDmRequest(effective.id, effective.name);
-    close();
+    setSent(true);
+    setTimeout(() => setSent(false), 1200);
     navigate("/dm"); // visa listan med requests (för demo)
   }
 
@@ -95,10 +126,6 @@ export function ProfilePreviewModal() {
     if (expanded) collapse();
     else expand();
   }
-
-  const bioText = (effective.bio ?? "").trim();
-  const collapsedBio =
-    bioText.length > 120 ? bioText.slice(0, 120).trim() + "…" : bioText;
 
   return (
     <div className="fixed inset-0 z-50">
@@ -108,20 +135,20 @@ export function ProfilePreviewModal() {
         onClick={close}
       />
 
-      {/* Modal container: botten-sheet när collapsed, fullscreen när expanded */}
+      {/* Profil Expanded / Modal container: botten-sheet när collapsed, fullscreen när expanded */}
       <div
         className={[
           "absolute mx-auto w-full max-w-md border bg-background shadow-xl transition-all duration-300",
           expanded
             ? "inset-0 rounded-none" // ✅ fullscreen
-            : "inset-x-0 bottom-0 h-[55dvh] rounded-t-2xl overflow-hidden", // ✅ sheet
+            : "inset-x-0 bottom-0 h-[60dvh] rounded-t-2xl overflow-hidden", // ✅ sheet
         ].join(" ")}
       >
-        {/* Header gradient */}
+        {/* Header i Profil / Header gradient */}
         <div
           className={[
             "relative bg-gradient-to-r from-fuchsia-500/30 via-indigo-500/30 to-sky-500/30",
-            expanded ? "h-36" : "h-16",
+            expanded ? "h-16" : "h-16",
           ].join(" ")}
         >
           <button
@@ -136,7 +163,7 @@ export function ProfilePreviewModal() {
         <button
           type="button"
           onClick={toggleExpanded}
-          className="flex w-full justify-center py-2"
+          className="flex-1 w-full justify-center py-2 items-center flex"
           aria-label={expanded ? "Minimera" : "Expandera"}
           title={expanded ? "Minimera" : "Expandera"}
         >
@@ -144,10 +171,10 @@ export function ProfilePreviewModal() {
         </button>
 
         {/* Content */}
-        <div className="h-[calc(100%-64px)] overflow-y-auto">
+        <div className="h-[calc(100%-64px)] overflow-y-auto -mt-5">
           {/* ✅ Mindre “dra upp” i expanded (för att inte klippa avatar) */}
-          <div className={(expanded ? "-mt-10" : "-mt-5") + " p-4 pb-6"}>
-            <div className="flex items-end gap-3">
+          <div className={(expanded ? "mt-1" : "mt-2") + " p-4 pb-6"}>
+            <div className="flex items-center gap-3 padding-5">
               <button
                 type="button"
                 onClick={() => {
@@ -158,12 +185,13 @@ export function ProfilePreviewModal() {
                 aria-label="Öppna bilder"
                 title="Öppna bilder"
               >
+                {/* // bilden i förhandsvisningen, lilla rutan */}
                 <img
                   src={avatarSrc}
                   alt={effective.name}
                   className={[
-                    "rounded-full border bg-background",
-                    expanded ? "h-32 w-32" : "h-28 w-28",
+                    "rounded-full border bg-muted",
+                    expanded ? "h-32 w-32" : "h-32 w-32",
                     // ✅ behåll cover men fokusera toppen (slipper halvt huvud)
                     "object-cover object-top",
                   ].join(" ")}
@@ -173,17 +201,15 @@ export function ProfilePreviewModal() {
               <div className="flex-1">
                 <div className="text-xl font-semibold leading-tight">
                   {effective.name}
+                  {typeof effective.age === "number" ? (
+                    <span className="font-semibold">, {effective.age}</span>
+                  ) : null}
                 </div>
 
                 <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                   {effective.location ? (
                     <span className="rounded-full border px-2 py-0.5">
                       {effective.location}
-                    </span>
-                  ) : null}
-                  {typeof effective.age === "number" ? (
-                    <span className="rounded-full border px-2 py-0.5">
-                      {effective.age} år
                     </span>
                   ) : null}
 
@@ -198,7 +224,7 @@ export function ProfilePreviewModal() {
 
             {/* Överblick med riktig bio */}
             <div className="mt-4 rounded-lg border p-3">
-              <div className="text-sm font-medium">Överblick</div>
+              <div className="text-sm font-medium"></div>
               <div className="mt-1 text-sm text-muted-foreground whitespace-pre-wrap">
                 {expanded
                   ? bioText || "Ingen bio angiven ännu."
@@ -206,18 +232,52 @@ export function ProfilePreviewModal() {
                     "Snabb överblick. Tryck “Visa profil” för mer."}
               </div>
             </div>
-
+            {/* // Profildetaljer (endast vid expanded) */}
             {expanded && (
               <div className="mt-3 space-y-3">
                 <div className="rounded-lg border p-3">
-                  <div className="text-sm font-medium">Info</div>
-                  <div className="mt-1 text-sm text-muted-foreground">
-                    Ort: {effective.location ?? "—"}
-                    <br />
-                    Ålder:{" "}
-                    {typeof effective.age === "number"
-                      ? `${effective.age} år`
-                      : "—"}
+                  <div className="text-sm font-medium"></div>
+
+                  <div className="mt-2 flex flex-wrap gap-2 text-sm">
+                    {effective.pronouns ? (
+                      <span className="rounded-full border px-2 py-0.5 text-muted-foreground">
+                        {effective.pronouns}
+                      </span>
+                    ) : null}
+
+                    {effective.genderIdentity ? (
+                      <span className="rounded-full border px-2 py-0.5 text-muted-foreground">
+                        {effective.genderIdentity}
+                      </span>
+                    ) : null}
+
+                    {effective.relationshipStatus ? (
+                      <span className="rounded-full border px-2 py-0.5 text-muted-foreground">
+                        {effective.relationshipStatus}
+                      </span>
+                    ) : null}
+
+                    {orientations.length > 0 ? (
+                      <span className="rounded-full border px-2 py-0.5 text-muted-foreground">
+                        {" "}
+                        {orientations.includes("Other") &&
+                        effective.orientationOtherText
+                          ? `${orientations.filter((x) => x !== "Other").join(", ")}${
+                              orientations.length > 1 ? ", " : ""
+                            }${effective.orientationOtherText}`
+                          : orientations.join(", ")}
+                      </span>
+                    ) : null}
+
+                    {/* fallback om inget finns */}
+                    {!effective.pronouns &&
+                    !effective.genderIdentity &&
+                    !effective.relationshipStatus &&
+                    !(effective.orientations?.length ?? 0) ? (
+                      <div className="text-sm text-muted-foreground">
+                        Ingen extra info angiven ännu.
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 
@@ -253,20 +313,20 @@ export function ProfilePreviewModal() {
                 </div>
               </div>
             )}
-
-            <div className="mt-3 flex gap-2">
+            {/* // Visa profil / Starta PM knappar */}
+            <div className="mt-3 flex gap-2 flex-col">
               <button
                 onClick={toggleExpanded}
-                className="h-11 w-full rounded-md border text-sm font-medium hover:bg-muted transition active:scale-[0.99]"
+                className="h-11 w-full rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition active:scale-[0.99]"
               >
                 {expanded ? "Minimera" : "Visa profil"}
               </button>
 
               <button
                 onClick={startPm}
-                className="h-11 w-full rounded-md border text-sm font-medium hover:bg-muted transition active:scale-[0.99]"
+                className="h-11 w-full rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition active:scale-[0.99]"
               >
-                Starta PM
+                {sent ? "Förfrågan skickad ✅" : "Starta PM"}
               </button>
             </div>
           </div>

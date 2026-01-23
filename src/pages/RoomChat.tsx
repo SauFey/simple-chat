@@ -5,22 +5,20 @@ import { useChatStore } from "../stores/chatStore";
 import { ROOMS } from "../data/rooms";
 import { ParticipantsDrawer } from "@/components/room/ParticipantsDrawer";
 
-const EMPTY_MESSAGES: any[] = [];
+const EMPTY_ARR: any[] = [];
 
 export function RoomChat() {
   const params = useParams<{ roomId: string }>();
   const roomId = params.roomId;
-
-  if (!roomId) return null;
 
   const roomKey = roomId;
 
   const ensureRoom = useChatStore((s) => s.ensureRoom);
   const meId = useChatStore((s) => s.meSaved.id);
 
-  const participants = useChatStore((s) => s.roomParticipants[roomKey] ?? []);
-  const messages = useChatStore(
-    (s) => s.roomMessages[roomKey] ?? EMPTY_MESSAGES,
+  const messages = useChatStore((s) => s.roomMessages[roomKey] ?? EMPTY_ARR);
+  const participants = useChatStore(
+    (s) => s.roomParticipants[roomKey] ?? EMPTY_ARR,
   );
 
   const roomName = useMemo(() => {
@@ -28,6 +26,8 @@ export function RoomChat() {
   }, [roomKey]);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  if (!roomId) return null;
 
   // Initiera rummet när roomId ändras
   useEffect(() => {

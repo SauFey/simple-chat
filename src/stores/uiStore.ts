@@ -7,6 +7,14 @@ export type PublicProfile = {
   location?: string;
   age?: number;
   isMe?: boolean; // ✅ nytt
+  pronouns?: string;
+  orientations?: string[];
+  orientationOtherText?: string;
+  genderIdentity?: string;
+  relationshipStatus?: string;
+  photos: { url: string; path?: string }[];
+  url: string;
+  path?: string;
 };
 
 type UiStore = {

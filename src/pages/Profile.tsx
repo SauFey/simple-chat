@@ -1,20 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   useChatStore,
-  type Orientation,
-  type Pronouns,
   canChangeGender,
   genderRemainingMs,
-  type GenderIdentityPreset,
-  type RelationshipStatus,
+  ORIENTATION,
+  PRONOUN_OPTIONS,
+  GENDER_OPTIONS,
+  REL_STATUS_OPTIONS,
 } from "@/stores/chatStore";
 
-import { uploadAvatar, uploadProfilePhoto } from "../lib/storage";
-import { deleteProfilePhoto } from "../lib/storage";
+import {
+  uploadAvatar,
+  uploadProfilePhoto,
+  deleteProfilePhoto,
+  deleteAvatar,
+} from "../lib/storage";
 import { X } from "lucide-react";
-import { deleteAvatar } from "../lib/storage";
+import { ProjectionNodeConfig } from "framer-motion";
 
-const ORIENTATION_OPTIONS: { key: Orientation; label: string }[] = [
+const ORIENTATION_OPTIONS: { key: ORIENTATION; label: string }[] = [
   { key: "Gay", label: "Gay" },
   { key: "Lesbian", label: "Lesbisk" },
   { key: "Bisexual", label: "Bisexuell" },
@@ -28,44 +32,16 @@ const ORIENTATION_OPTIONS: { key: Orientation; label: string }[] = [
   { key: "PreferNotToSay", label: "Vill inte ange" },
 ];
 
-const PRONOUN_OPTIONS: Pronouns[] = [
-  "Välj…",
-  "han/honom",
-  "hon/henne",
-  "hen",
-  "de/dem",
-  "annat",
-  "vill inte ange",
-];
+export type Pronouns = (typeof PRONOUN_OPTIONS)[number];
 
-const GENDER_OPTIONS: GenderIdentityPreset[] = [
-  "Välj…",
-  "kvinna",
-  "man",
-  "icke-binär",
-  "transkvinna",
-  "transman",
-  "genderfluid",
-  "agender",
-  "annat",
-  "vill inte ange",
-];
+export type GenderIdentityPreset = (typeof GENDER_OPTIONS)[number];
 
-const REL_STATUS_OPTIONS: RelationshipStatus[] = [
-  "Välj…",
-  "singel",
-  "i relation",
-  "gift",
-  "förlovad",
-  "det är komplicerat",
-  "öppet förhållande",
-  "vill inte ange",
-];
+export type RelationshipStatus = (typeof REL_STATUS_OPTIONS)[number];
 
 function toggleOrientation(
-  current: Orientation[],
-  value: Orientation,
-): Orientation[] {
+  current: ORIENTATION[],
+  value: ORIENTATION,
+): ORIENTATION[] {
   if (value === "PreferNotToSay") return ["PreferNotToSay"];
 
   const filtered = current.filter((x) => x !== "PreferNotToSay");
@@ -305,25 +281,27 @@ export function Profile() {
           <div>
             <div className="text-sm font-medium">Civilstånd</div>
             <select
-              value={meDraft.relationshipStatus}
+              value={meDraft.relationshipStatus ?? ""}
               onChange={(e) =>
                 setMe({
-                  relationshipStatus: e.target.value as RelationshipStatus,
+                  relationshipStatus: e.target.value,
                 })
               }
               className="mt-1 w-full rounded-md border bg-background px-2 py-2 text-sm"
             >
-              {REL_STATUS_OPTIONS.map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
+              <option value="">Välj…</option>
+              <option value="Single">Singel</option>
+              <option value="Dating">Dejtar</option>
+              <option value="In a relationship">I relation</option>
+              <option value="Engaged">Förlovad</option>
+              <option value="Married">Gift</option>
+              <option value="It&#39;s complicated">Det är komplicerat</option>
             </select>
           </div>
         </div>
 
         <div>
-          <div className="text-sm font-medium">Bio</div>
+          <div className="text-sm font-medium">Om mig</div>
           <textarea
             value={meDraft.bio ?? ""}
             onChange={(e) => setMe({ bio: e.target.value })}
@@ -420,15 +398,19 @@ export function Profile() {
 
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <div className="text-sm font-medium">Pronomen</div>
-            <select
-              value={meDraft.pronouns}
-              onChange={(e) => setMe({ pronouns: e.target.value as Pronouns })}
-              className="mt-1 w-full rounded-md border bg-background px-2 py-2 text-sm"
+            <div
+              className="text-sm font-medium mt-1 w-full rounded-md border bg-background px-2 py-2
+              text-sm"
             >
-              {PRONOUN_OPTIONS.map((v) => (
-                <option key={v} value={v}>
-                  {v}
+              Pronomen
+            </div>
+            <select
+              value={meDraft.pronouns ?? ""}
+              onChange={(e) => setMe({ pronouns: e.target.value })}
+            >
+              {PRONOUN_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
                 </option>
               ))}
             </select>

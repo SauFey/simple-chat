@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { dmThreads } from "../data/mock";
 import { useChatStore } from "../stores/chatStore";
 
@@ -8,6 +8,7 @@ export function DmList() {
   const accept = useChatStore((s) => s.acceptDmRequest);
   const decline = useChatStore((s) => s.declineDmRequest);
   const block = useChatStore((s) => s.blockUser);
+  const navigate = useNavigate();
 
   return (
     <div className="p-4 space-y-4">
@@ -49,7 +50,10 @@ export function DmList() {
               <div className="mt-3 flex gap-2">
                 <button
                   className="h-10 w-full rounded-md border text-sm hover:bg-muted transition"
-                  onClick={() => accept(r.id)}
+                  onClick={() => {
+                    accept(r.id);
+                    navigate(`/dm/${r.fromUserId}`);
+                  }}
                 >
                   Acceptera
                 </button>

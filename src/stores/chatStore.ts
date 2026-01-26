@@ -134,6 +134,12 @@ type ChatStore = {
 
   blockedUserIds: string[];
   blockUser: (userId: string) => void;
+
+  resetGuest: () => void;
+  resetGuestAccount: (opts?: { preferName?: string }) => {
+    name: string;
+    kept: boolean;
+  };
 };
 
 export type DmRequest = {
@@ -232,6 +238,59 @@ const GENDER_COOLDOWN_DAYS = 7;
 
 function genderCooldownMs() {
   return GENDER_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+}
+
+function normName(name: string) {
+  // Normalisera namn
+  return name.trim().toLowerCase();
+}
+
+function isNameAvailable(
+  get: () => any,
+  desiredName: string,
+  excludeUserId?: string,
+) {
+  // Är namnet ledigt?
+  const desired = normName(desiredName);
+  if (!desired) return false;
+
+  const state = get();
+  // Kolla mot alla deltagare som vi känner till (demo)
+  const participantsByRoom = state.roomParticipants ?? {};
+
+  const all = Object.values(participantsByRoom).flat() as Array<{
+    id?: string;
+    name?: string;
+  }>;
+
+  const taken = new Set(
+    all
+      .filter((u) => u.id !== excludeUserId) // ✅ ignorera mig själv
+      .map((u) => normName(u.name ?? ""))
+      .filter(Boolean),
+  );
+
+  // Kolla även mot “me” (för säkerhets skull)
+  taken.add(normName(state.meSaved?.name ?? ""));
+
+  return !taken.has(desired);
+}
+
+function randomGuestName() {
+  // Generera slumpnamn
+  const words = [
+    "Bubblegum",
+    "Neon",
+    "Moon",
+    "Pixel",
+    "Velvet",
+    "Aurora",
+    "Koi",
+    "Nimbus",
+  ];
+  const w = words[Math.floor(Math.random() * words.length)];
+  const n = Math.floor(10 + Math.random() * 90); // 10–99
+  return `${w}${n}`;
 }
 
 export function canChangeGender(meSaved: { genderChangedAt?: string }) {
@@ -500,6 +559,74 @@ export const useChatStore = create<ChatStore>()(
           ),
           dmRequests: state.dmRequests.filter((r) => r.fromUserId !== userId),
         })),
+
+      resetGuest: () =>
+        set(() => {
+          const fresh = defaultMe();
+          const now = new Date().toISOString(); // se till att den verkligen blir guest och får ny tidsstämpel
+          const next = {
+            ...fresh,
+            accountType: "guest" as const,
+            guestCreatedAt: now,
+            // om du har expiresAt i din modell, sätt den också:
+            // guestExpiresAt: new Date(Date.now() + 3 * 24 * 60 * 60 *1000).toISOString(),
+          };
+
+          return {
+            meSaved: next,
+            meDraft: { ...next },
+            // valfritt: töm chatthistoriken om guest gick ut
+            roomMessages: {},
+            dmMessages: {},
+            dmRequests: [],
+            blockedUserIds: [],
+          };
+        }),
+      resetGuestAccount: (opts) => {
+        const prefer = opts?.preferName?.trim() ?? "";
+        const now = new Date().toISOString();
+        const currentId = get().meSaved?.id;
+
+        // välj namn
+        let name = "";
+        let kept = false;
+
+        if (prefer && isNameAvailable(get, prefer, currentId)) {
+          name = prefer;
+          kept = true;
+        } else {
+          // försök generera ett ledigt namn (några försök)
+          for (let i = 0; i < 8; i++) {
+            const candidate = randomGuestName();
+            if (isNameAvailable(get, candidate)) {
+              name = candidate;
+              break;
+            }
+          }
+          if (!name) name = randomGuestName(); // fallback även om “allt är taget” lokalt
+        }
+
+        const fresh = defaultMe();
+        const next = {
+          ...fresh,
+          accountType: "guest" as const,
+          guestCreatedAt: now,
+          name,
+        };
+
+        set(() => ({
+          meSaved: next,
+          meDraft: { ...next },
+
+          // valfritt men rimligt: rensa historik när guest går ut
+          roomMessages: {},
+          dmMessages: {},
+          dmRequests: [],
+          blockedUserIds: [],
+        }));
+
+        return { name, kept };
+      },
     }),
     {
       name: "simple-chat-store",

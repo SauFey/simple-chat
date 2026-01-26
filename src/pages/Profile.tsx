@@ -398,15 +398,11 @@ export function Profile() {
 
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <div
-              className="text-sm font-medium mt-1 w-full rounded-md border bg-background px-2 py-2
-              text-sm"
-            >
-              Pronomen
-            </div>
+            <div className="text-sm font-medium">Pronomen</div>
             <select
               value={meDraft.pronouns ?? ""}
               onChange={(e) => setMe({ pronouns: e.target.value })}
+              className="mt-1 w-full rounded-md border bg-background px-2 py-2 text-sm disabled:opacity-60"
             >
               {PRONOUN_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>

@@ -7,14 +7,14 @@ export type PublicProfile = {
   location?: string;
   age?: number;
   isMe?: boolean; // ✅ nytt
+
   pronouns?: string;
   orientations?: string[];
   orientationOtherText?: string;
   genderIdentity?: string;
   relationshipStatus?: string;
+
   photos: { url: string; path?: string }[];
-  url: string;
-  path?: string;
 };
 
 type UiStore = {
@@ -25,12 +25,18 @@ type UiStore = {
   closeProfile: () => void;
   expandProfile: () => void;
   collapseProfile: () => void;
+  toast: { message: string } | null;
+  showToast: (message: string) => void;
+  clearToast: () => void;
 };
 
 export const useUiStore = create<UiStore>((set) => ({
   profileOpen: false,
   profileExpanded: false,
   selectedProfile: null,
+  toast: null,
+  showToast: (message) => set({ toast: { message } }),
+  clearToast: () => set({ toast: null }),
 
   openProfile: (p) =>
     set({ profileOpen: true, selectedProfile: p, profileExpanded: false }),

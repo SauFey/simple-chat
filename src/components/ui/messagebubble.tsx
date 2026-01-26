@@ -1,5 +1,6 @@
 import type { ChatMessage } from "../../stores/chatStore";
 import { UserLink } from "../user/UserLink";
+import type { PublicProfile } from "../../stores/uiStore";
 
 function formatTime(iso: string) {
   const d = new Date(iso);
@@ -16,12 +17,13 @@ export function MessageBubble({
   const profile = {
     id: msg.senderId,
     name: msg.senderName,
-    avatarUrl: msg.avatarUrl,
+    avatarUrl:
+      msg.avatarUrl ?? "https://api.dicebear.com/9.x/thumbs/svg?seed=User",
     // TODO: koppla riktiga fält senare
     location: undefined,
     age: undefined,
     isMe,
-  };
+  } as PublicProfile;
 
   return (
     <div className={`flex gap-2 ${isMe ? "justify-end" : "justify-start"}`}>

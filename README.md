@@ -71,4 +71,6 @@ cd simple-chat
 ```
 
 ### 2) Starta projektet med
+```bash
 npm run dev
+```

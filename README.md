@@ -65,5 +65,9 @@ Appen är byggd med följande principer:
 
 ### 1) Klona repot
 ```bash
+
 git clone https://github.com/SauFey/simple-chat.git
 cd simple-chat
+
+### 2) Starta projektet med
+npm run dev
